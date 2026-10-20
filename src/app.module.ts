@@ -7,6 +7,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { databaseConfig } from './db/database.config.js';
 import { EmployeesModule } from './employees/employees.module.js';
+import { SalariesModule } from './salaries/salaries.module.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { EmployeesModule } from './employees/employees.module.js';
     }),
 
     EmployeesModule,
+    SalariesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

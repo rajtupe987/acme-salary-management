@@ -1,4 +1,5 @@
 
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import {
   FastifyAdapter,
@@ -12,11 +13,27 @@ async function bootstrap() {
     new FastifyAdapter(),
   );
 
-  app.setGlobalPrefix('api');
+  if (process.env.NODE_ENV !== 'test') {
+    app.setGlobalPrefix('api');
+  }
 
-  await app.listen(3000, '0.0.0.0');
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
 
-  console.log('Server running on http://localhost:3000/api');
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
+  const port = Number(process.env.PORT ?? 3000);
+  await app.listen(port, '0.0.0.0');
+
+  console.log(`Server running on http://localhost:${port}/api`);
 }
 
 bootstrap();

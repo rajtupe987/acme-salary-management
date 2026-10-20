@@ -18,6 +18,7 @@
     "migration:run": "node --import tsx ./node_modules/typeorm/cli.js migration:run -d src/db/data-source.ts",
     "migration:revert": "node --import tsx ./node_modules/typeorm/cli.js migration:revert -d src/db/data-source.ts",
     "migration:show": "node --import tsx ./node_modules/typeorm/cli.js migration:show -d src/db/data-source.ts",
+    "seed": "node --import tsx src/db/seed.ts",
     "lint": "oxlint --type-aware src/ test/",
     "test": "vitest run",
     "test:watch": "vitest",
