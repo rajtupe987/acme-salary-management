@@ -35,10 +35,12 @@ export class EmployeeRepository {
 
   async findPaginated(
     query: ListEmployeesQueryDto,
-  ): Promise<{ data: Employee[]; total: number; page: number; limit: number; totalPages: number }> {
+  ): Promise<{ data: Employee[]; total: number; page: number; limit: number; offset: number; totalPages: number }> {
     const page = query.page && query.page > 0 ? query.page : 1;
     const limit = query.limit && query.limit > 0 ? query.limit : 10;
-    const skip = (page - 1) * limit;
+    const offset = query.offset !== undefined && query.offset >= 0 ? query.offset : (page - 1) * limit;
+    const skip = offset;
+    const responsePage = offset > 0 ? Math.floor(offset / limit) + 1 : page;
 
     const qb: SelectQueryBuilder<Employee> = this.repo
       .createQueryBuilder('employee')
@@ -81,8 +83,9 @@ export class EmployeeRepository {
     return {
       data,
       total,
-      page,
+      page: responsePage,
       limit,
+      offset,
       totalPages,
     };
   }

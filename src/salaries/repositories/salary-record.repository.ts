@@ -48,10 +48,13 @@ export class SalaryRecordRepository {
     employeeId: string,
     page = 1,
     limit = 10,
-  ): Promise<{ data: SalaryRecord[]; total: number; page: number; limit: number; totalPages: number }> {
+    offset = 0,
+  ): Promise<{ data: SalaryRecord[]; total: number; page: number; limit: number; offset: number; totalPages: number }> {
     const validPage = page > 0 ? page : 1;
     const validLimit = limit > 0 ? limit : 10;
-    const skip = (validPage - 1) * validLimit;
+    const validOffset = offset >= 0 ? offset : (validPage - 1) * validLimit;
+    const skip = validOffset;
+    const responsePage = validOffset > 0 ? Math.floor(validOffset / validLimit) + 1 : validPage;
 
     const [data, total] = await this.repo
       .createQueryBuilder('salary')
@@ -67,8 +70,9 @@ export class SalaryRecordRepository {
     return {
       data,
       total,
-      page: validPage,
+      page: responsePage,
       limit: validLimit,
+      offset: validOffset,
       totalPages,
     };
   }

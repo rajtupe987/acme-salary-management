@@ -46,6 +46,7 @@ export class SalariesController {
       employeeId,
       query.page,
       query.limit,
+      query.offset,
     );
   }
 
@@ -59,6 +60,18 @@ export class SalariesController {
   ) {
     const hrUserId = headerUserId ?? altHeaderUserId;
     return this.salariesService.reviseSalary(employeeId, dto, hrUserId);
+  }
+
+  @Post('salaries/corrections')
+  @HttpCode(HttpStatus.CREATED)
+  async correctSalary(
+    @Param('employeeId', new ParseUUIDPipe({ version: '4' })) employeeId: string,
+    @Body() dto: ReviseSalaryDto,
+    @Headers('x-user-id') headerUserId?: string,
+    @Headers('x-hr-user-id') altHeaderUserId?: string,
+  ) {
+    const hrUserId = headerUserId ?? altHeaderUserId;
+    return this.salariesService.correctSalary(employeeId, dto, hrUserId);
   }
 
   @Get('salaries/:salaryId')
@@ -78,6 +91,7 @@ export class SalariesController {
       employeeId,
       query.page,
       query.limit,
+      query.offset,
     );
   }
 }

@@ -125,12 +125,18 @@ export class SalariesService {
     return currentSalary;
   }
 
-  async getSalaryHistory(employeeId: string, page = 1, limit = 10) {
+  async getSalaryHistory(
+    employeeId: string,
+    page = 1,
+    limit = 10,
+    offset = 0,
+  ) {
     await this.getEligibleEmployee(employeeId);
     return this.salaryRecordRepository.findPaginatedByEmployeeId(
       employeeId,
       page,
       limit,
+      offset,
     );
   }
 
@@ -167,12 +173,16 @@ export class SalariesService {
       );
     }
 
-    const duplicateDate = existingRecords.find(
-      (r) => r.effectiveFrom === dto.effectiveFrom,
-    );
-    if (duplicateDate) {
+    const conflictingRecord = existingRecords.find((record) => {
+      const recordEndDate = record.effectiveTo ?? record.effectiveFrom;
+      return (
+        record.effectiveFrom <= dto.effectiveFrom &&
+        recordEndDate >= dto.effectiveFrom
+      );
+    });
+    if (conflictingRecord) {
       throw new ConflictException(
-        `A salary record with effective date '${dto.effectiveFrom}' already exists for this employee.`,
+        `A salary record already exists for the effective period containing '${dto.effectiveFrom}' for this employee.`,
       );
     }
 
@@ -234,6 +244,108 @@ export class SalariesService {
     });
   }
 
+  async correctSalary(
+    employeeId: string,
+    dto: ReviseSalaryDto,
+    hrUserId?: string,
+  ): Promise<SalaryRecord> {
+    const employee = await this.getEligibleEmployee(employeeId);
+
+    if (employee.employmentStatus === EmploymentStatus.TERMINATED) {
+      throw new BadRequestException(
+        'Cannot correct salary of a terminated employee.',
+      );
+    }
+
+    const numAmount = Number(dto.amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      throw new BadRequestException(
+        'Amount must be a positive number greater than 0.',
+      );
+    }
+
+    const currency = await this.currencyRepository.findByCode(dto.currencyCode);
+    if (!currency) {
+      throw new BadRequestException(
+        `Currency with code '${dto.currencyCode.toUpperCase()}' does not exist.`,
+      );
+    }
+
+    const existingRecords =
+      await this.salaryRecordRepository.findAllByEmployeeId(employeeId);
+    if (existingRecords.length === 0) {
+      throw new BadRequestException(
+        'Employee has no existing salary record. Assign an initial salary first.',
+      );
+    }
+
+    const effectiveDate = dto.effectiveFrom;
+    const conflictingRecord = existingRecords.find((record) => {
+      const recordEndDate = record.effectiveTo ?? record.effectiveFrom;
+      return (
+        record.effectiveFrom <= effectiveDate &&
+        recordEndDate >= effectiveDate
+      );
+    });
+    if (conflictingRecord) {
+      throw new ConflictException(
+        `A salary record already exists for the effective period containing '${effectiveDate}' for this employee.`,
+      );
+    }
+
+    const precedingRecords = existingRecords
+      .filter((record) => record.effectiveFrom < effectiveDate)
+      .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+    const precedingRecord = precedingRecords.length > 0 ? precedingRecords[0] : null;
+
+    const succeedingRecords = existingRecords
+      .filter((record) => record.effectiveFrom > effectiveDate)
+      .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+    const succeedingRecord = succeedingRecords.length > 0 ? succeedingRecords[0] : null;
+
+    const resolvedHrUserId =
+      await this.hrUserResolverService.resolveHrUserId(hrUserId);
+
+    return this.dataSource.transaction(async (manager) => {
+      if (precedingRecord) {
+        precedingRecord.effectiveTo = getPreviousDay(effectiveDate);
+        await manager.save(SalaryRecord, precedingRecord);
+      }
+
+      const effectiveTo = succeedingRecord
+        ? getPreviousDay(succeedingRecord.effectiveFrom)
+        : null;
+
+      const correctedRecord = manager.create(SalaryRecord, {
+        employeeId,
+        amount: numAmount.toFixed(2),
+        currencyCode: dto.currencyCode.toUpperCase(),
+        effectiveFrom: effectiveDate,
+        effectiveTo,
+        changeReason: dto.changeReason ?? 'Salary correction',
+        createdBy: resolvedHrUserId,
+      });
+
+      const savedRecord = await manager.save(SalaryRecord, correctedRecord);
+
+      const auditLog = manager.create(SalaryAuditLog, {
+        employeeId,
+        salaryRecordId: savedRecord.id,
+        changedBy: resolvedHrUserId,
+        action: SalaryAuditAction.SALARY_CORRECTION,
+        oldAmount: precedingRecord ? precedingRecord.amount : null,
+        newAmount: numAmount.toFixed(2),
+        oldCurrencyCode: precedingRecord ? precedingRecord.currencyCode : null,
+        newCurrencyCode: dto.currencyCode.toUpperCase(),
+        reason: dto.changeReason ?? 'Salary correction',
+      });
+
+      await manager.save(SalaryAuditLog, auditLog);
+
+      return savedRecord;
+    });
+  }
+
   async getSalaryById(
     employeeId: string,
     salaryId: string,
@@ -253,12 +365,18 @@ export class SalariesService {
     return record;
   }
 
-  async getSalaryAuditLogs(employeeId: string, page = 1, limit = 10) {
+  async getSalaryAuditLogs(
+    employeeId: string,
+    page = 1,
+    limit = 10,
+    offset = 0,
+  ) {
     await this.getEligibleEmployee(employeeId);
     return this.salaryAuditLogRepository.findPaginatedByEmployeeId(
       employeeId,
       page,
       limit,
+      offset,
     );
   }
 }
